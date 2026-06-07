@@ -11,6 +11,7 @@ external/
 *.aux
 *.bbl
 *.blg
-*.log
 *.out
 *.toc
+*.fls
+*.fdb_latexmk
