@@ -16,5 +16,11 @@ external/
 *.fls
 *.fdb_latexmk
 
+# Generated registry data
 registries/*.jsonl
-registries/README.md
+
+# Keep registry docs/schemas/examples
+!registries/README.md
+!registries/*.schema.json
+!registries/examples/
+!registries/examples/**
