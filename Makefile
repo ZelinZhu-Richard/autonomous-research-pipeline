@@ -21,14 +21,25 @@ test-metaclaw:
 	  -H "Content-Type: application/json" \
 	  -d '{"model":"research-default","messages":[{"role":"user","content":"Say exactly: metaclaw works"}]}'
 
-run-arc-test: check-env
+run-arc-full: check-env
 	cd external/AutoResearchClaw && researchclaw run \
 	  --config ../../configs/researchclaw.yaml \
 	  --topic "$$(cat ../../ideas/seed_ideas/retrieval_failure_modes_001.md)" \
-	  --output ../../runs/raw/arc_retrieval_001 \
-	  --mode express \
+	  --output ../../runs/raw/arc_retrieval_full_001 \
+	  --mode thorough \
 	  --auto-approve \
-	  --to-stage EXPERIMENT_DESIGN
+	  --skip-noncritical-stage
+
+extract-arc-test: check-env
+	python scripts/extract_arc_run.py runs/raw/arc_retrieval_001 arc_retrieval_001
+
+show-registry:
+	tail -n 5 registries/idea_registry.jsonl | python -m json.tool
+
+extract-run: check-env
+	@test -n "$(RUN_DIR)" || (echo "Usage: make extract-run RUN_DIR=runs/raw/arc_retrieval_001 RUN_ID=arc_retrieval_001" && exit 1)
+	@test -n "$(RUN_ID)" || (echo "Usage: make extract-run RUN_DIR=runs/raw/arc_retrieval_001 RUN_ID=arc_retrieval_001" && exit 1)
+	python scripts/extract_arc_run.py $(RUN_DIR) $(RUN_ID)
 
 inspect-run: check-env
 	python scripts/inspect_run.py runs/raw/arc_retrieval_001
@@ -36,3 +47,6 @@ inspect-run: check-env
 git-safe:
 	git status --short
 	@echo "Make sure .env and runs/raw are NOT staged."
+
+leaderboard: check-env
+	python scripts/build_leaderboard.py
