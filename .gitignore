@@ -15,3 +15,6 @@ external/
 *.toc
 *.fls
 *.fdb_latexmk
+
+registries/*.jsonl
+registries/README.md
