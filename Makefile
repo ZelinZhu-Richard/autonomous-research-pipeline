@@ -41,6 +41,14 @@ extract-run: check-env
 	@test -n "$(RUN_ID)" || (echo "Usage: make extract-run RUN_DIR=runs/raw/arc_retrieval_001 RUN_ID=arc_retrieval_001" && exit 1)
 	python scripts/extract_arc_run.py $(RUN_DIR) $(RUN_ID)
 
+extract-claims: check-env
+	@test -n "$(RUN_DIR)" || (echo "Usage: make extract-claims RUN_DIR=runs/raw/arc_retrieval_001 RUN_ID=arc_retrieval_001" && exit 1)
+	@test -n "$(RUN_ID)" || (echo "Usage: make extract-claims RUN_DIR=runs/raw/arc_retrieval_001 RUN_ID=arc_retrieval_001" && exit 1)
+	python scripts/extract_claims.py $(RUN_DIR) $(RUN_ID)
+
+show-claims:
+	tail -n 20 registries/claim_registry.jsonl | python -m json.tool
+
 inspect-run: check-env
 	python scripts/inspect_run.py runs/raw/arc_retrieval_001
 
