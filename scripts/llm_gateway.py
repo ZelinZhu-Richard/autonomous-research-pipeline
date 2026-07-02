@@ -80,6 +80,7 @@ def build_providers() -> List[Dict[str, Any]]:
                 "type": "codex_cli",
                 "command": os.getenv("CODEX_CLI_COMMAND", "codex"),
                 "model": os.getenv("CODEX_CLI_MODEL", ""),
+                "reasoning_effort": os.getenv("CODEX_CLI_REASONING_EFFORT", ""),
                 "sandbox": os.getenv("CODEX_CLI_SANDBOX", "read-only"),
                 "cwd": os.getenv("CODEX_CLI_CWD", os.getcwd()),
                 "timeout_sec": env_int("CODEX_CLI_TIMEOUT_SEC", 900),
@@ -303,6 +304,9 @@ async def call_codex_cli(
     ]
     if codex_model:
         cmd.extend(["--model", codex_model])
+    reasoning_effort = str(provider.get("reasoning_effort") or "")
+    if reasoning_effort:
+        cmd.extend(["-c", f"model_reasoning_effort={json.dumps(reasoning_effort)}"])
     cmd.append("-")
 
     proc = await asyncio.create_subprocess_exec(

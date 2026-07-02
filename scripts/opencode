@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+VERSION = "opencode-codex-shim 0.1.0"
+DEFAULT_CODEX_BEAST_MODEL = "gpt-5.5"
+DEFAULT_CODEX_REASONING_EFFORT = "xhigh"
+
+
+def usage() -> str:
+    return (
+        "Usage:\n"
+        "  opencode --version\n"
+        "  opencode run [-m MODEL] [--format FORMAT] PROMPT\n"
+    )
+
+
+def parse_run_args(argv: list[str]) -> tuple[str, str]:
+    model = ""
+    output_format = ""
+    prompt_parts: list[str] = []
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in {"-m", "--model"}:
+            i += 1
+            if i >= len(argv):
+                raise ValueError(f"{arg} requires a value")
+            model = argv[i]
+        elif arg.startswith("-m="):
+            model = arg.split("=", 1)[1]
+        elif arg.startswith("--model="):
+            model = arg.split("=", 1)[1]
+        elif arg == "--format":
+            i += 1
+            if i >= len(argv):
+                raise ValueError("--format requires a value")
+            output_format = argv[i]
+        elif arg.startswith("--format="):
+            output_format = arg.split("=", 1)[1]
+        elif arg.startswith("-"):
+            raise ValueError(f"Unsupported opencode option: {arg}")
+        else:
+            prompt_parts.extend(argv[i:])
+            break
+        i += 1
+
+    if output_format and output_format != "json":
+        raise ValueError(f"Unsupported opencode format: {output_format}")
+
+    prompt = " ".join(prompt_parts).strip()
+    if not prompt and not sys.stdin.isatty():
+        prompt = sys.stdin.read().strip()
+    if not prompt:
+        raise ValueError("opencode run requires a prompt")
+
+    return model, prompt
+
+
+def resolve_codex_model(requested_model: str) -> str:
+    override = os.getenv("CODEX_BEAST_MODEL") or os.getenv("CODEX_CLI_MODEL") or ""
+    requested = (requested_model or "").strip()
+
+    if "/" in requested:
+        provider, model = requested.split("/", 1)
+        if provider != "openai":
+            raise ValueError(
+                "Codex Beast Mode shim only supports OpenAI-style model names; "
+                f"got provider prefix {provider!r}"
+            )
+        requested = model
+
+    if override:
+        return override
+
+    if requested in {"", "default", "research-default"}:
+        return DEFAULT_CODEX_BEAST_MODEL
+
+    return requested
+
+
+def resolve_reasoning_effort() -> str:
+    return os.getenv("CODEX_CLI_REASONING_EFFORT") or DEFAULT_CODEX_REASONING_EFFORT
+
+
+def build_codex_prompt(original_prompt: str, workspace: Path) -> str:
+    return f"""You are running as an OpenCode Beast Mode compatibility backend through Codex CLI.
+
+Working directory:
+{workspace}
+
+Read the workspace files if present:
+- EXPERIMENT_PLAN.yaml
+- GUIDANCE.md
+- opencode.json
+
+Use the original OpenCode prompt below as the authoritative task. Implement the requested experiment by writing complete files directly into the current workspace.
+
+Hard constraints:
+- Create a complete runnable `main.py`; it is the required entry point.
+- Write any helper `.py` files and `requirements.txt` only when needed.
+- Do not leave placeholders, TODO-only code, or prose-only output.
+- Do not execute generated experiment code, training, evaluation, package installs, or network downloads.
+- Do not modify files outside the current workspace.
+- Keep the final assistant message concise after writing files.
+
+Original OpenCode prompt:
+{original_prompt}
+"""
+
+
+def dry_run(workspace: Path, model: str, reasoning_effort: str, prompt: str) -> int:
+    main_py = workspace / "main.py"
+    main_py.write_text(
+        "\"\"\"Dry-run output from the repo-local Codex/OpenCode shim.\"\"\"\n\n"
+        "def main() -> None:\n"
+        "    print(\"primary_metric: 0.0\")\n\n\n"
+        "if __name__ == \"__main__\":\n"
+        "    main()\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "success": True,
+                "provider": "codex-cli",
+                "dry_run": True,
+                "model": model or "codex-default",
+                "reasoning_effort": reasoning_effort,
+                "prompt_chars": len(prompt),
+                "files": ["main.py"],
+            },
+            ensure_ascii=True,
+        )
+    )
+    return 0
+
+
+def run_codex(model: str, prompt: str) -> int:
+    codex_cmd = os.getenv("CODEX_CLI_COMMAND", "codex")
+    if not shutil.which(codex_cmd) and not Path(codex_cmd).exists():
+        print(f"Codex CLI command not found: {codex_cmd}", file=sys.stderr)
+        return 127
+
+    workspace = Path.cwd().resolve()
+    codex_model = resolve_codex_model(model)
+    reasoning_effort = resolve_reasoning_effort()
+    if os.getenv("OPENCODE_CODEX_DRY_RUN") == "1":
+        return dry_run(workspace, codex_model, reasoning_effort, prompt)
+
+    cmd = [
+        codex_cmd,
+        "-a",
+        "never",
+        "exec",
+        "--ephemeral",
+        "--sandbox",
+        "workspace-write",
+        "--color",
+        "never",
+        "-C",
+        str(workspace),
+    ]
+    if codex_model:
+        cmd.extend(["--model", codex_model])
+    if reasoning_effort:
+        cmd.extend(["-c", f"model_reasoning_effort={json.dumps(reasoning_effort)}"])
+    cmd.append(build_codex_prompt(prompt, workspace))
+
+    completed = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    print(
+        json.dumps(
+            {
+                "success": completed.returncode == 0,
+                "provider": "codex-cli",
+                "model": codex_model or "codex-default",
+                "reasoning_effort": reasoning_effort,
+                "returncode": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+            },
+            ensure_ascii=True,
+        )
+    )
+    return completed.returncode
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in {"-h", "--help", "help"}:
+        print(usage(), end="")
+        return 0
+
+    if argv[0] in {"-v", "--version", "version"}:
+        print(VERSION)
+        return 0
+
+    if argv[0] != "run":
+        print(f"Unsupported opencode command: {argv[0]}", file=sys.stderr)
+        print(usage(), file=sys.stderr, end="")
+        return 2
+
+    try:
+        model, prompt = parse_run_args(argv[1:])
+        return run_codex(model, prompt)
+    except ValueError as exc:
+        print(f"opencode-codex-shim: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

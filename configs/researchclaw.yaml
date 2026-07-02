@@ -3,7 +3,7 @@ project:
   mode: "full-auto"
 
 research:
-  topic: "Your research topic here"
+  topic: "Hypergraph-Based Prediction of Semiconductor Stock Reactions to Supply-Chain Shocks"
   domains:
     - "machine-learning"
   daily_paper_count: 10
@@ -209,6 +209,12 @@ prompts:
   #     code_generation: "Favour MadGraph5 + Pythia8 + Delphes toolchains."
   #     paper_outline: ./prompts/jhep_outline_rules.md
   extra_prompts: {}
+
+
+skills:
+  enabled: true
+  custom_dirs:
+    - "../../skills"
 
 
 # === MetaClaw Integration ===
