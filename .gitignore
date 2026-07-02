@@ -8,6 +8,11 @@ runs/raw/
 runs/tmp/
 external/
 
+# Generated local agent exports and logs
+.agents/
+.claude/
+.codex-log/
+
 *.aux
 *.bbl
 *.blg
