@@ -49,8 +49,25 @@ def score_run(row: dict) -> int:
     return max(score, 0)
 
 
+def dedupe_latest_by_run_id(rows: list[dict]) -> list[dict]:
+    latest_by_run_id: dict[str, dict] = {}
+    no_id_rows: list[dict] = []
+
+    for row in rows:
+        run_id = str(row.get("run_id") or "")
+        if not run_id:
+            no_id_rows.append(row)
+            continue
+
+        existing = latest_by_run_id.get(run_id)
+        if existing is None or str(row.get("created_at") or "") >= str(existing.get("created_at") or ""):
+            latest_by_run_id[run_id] = row
+
+    return no_id_rows + list(latest_by_run_id.values())
+
+
 def main() -> int:
-    rows = load_jsonl(REGISTRY)
+    rows = dedupe_latest_by_run_id(load_jsonl(REGISTRY))
 
     if not rows:
         OUT.parent.mkdir(parents=True, exist_ok=True)

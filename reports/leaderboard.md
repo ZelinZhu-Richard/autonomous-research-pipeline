@@ -3,7 +3,6 @@
 | Rank | Run ID | Score | Status | Candidates | Shortlist | Paper | Failures |
 |---:|---|---:|---|---:|---:|---|---:|
 | 1 | `arc_retrieval_001` | 30 | partial | 627 | 0 | No | 5 |
-| 2 | `arc_retrieval_001` | 30 | partial | 627 | 0 | No | 5 |
 
 ## Scoring
 

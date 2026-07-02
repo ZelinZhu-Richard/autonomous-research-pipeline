@@ -36,10 +36,11 @@ openclaw_bridge:
 
 llm:
   provider: "openai-compatible"
+  # Route ARC through MetaClaw first. MetaClaw then calls the local gateway.
   base_url: "http://127.0.0.1:30000/v1"
   wire_api: "chat_completions"
-  api_key_env: "OPENAI_API_KEY"
-  api_key: "local-dev-key"
+  api_key_env: "GATEWAY_API_KEY"
+  api_key: ""
   primary_model: "research-default"
   fallback_models: []
   

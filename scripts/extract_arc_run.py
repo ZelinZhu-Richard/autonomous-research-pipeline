@@ -23,10 +23,48 @@ def count_jsonl(path: Path | None) -> int:
     return sum(1 for line in path.read_text(errors="ignore").splitlines() if line.strip())
 
 
-def append_jsonl(path: Path, obj: dict) -> None:
+def load_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+
+    rows = []
+    for line in path.read_text(errors="ignore").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            rows.append(value)
+    return rows
+
+
+def write_jsonl(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    with path.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def upsert_jsonl_by_run_id(path: Path, obj: dict) -> None:
+    run_id = obj.get("run_id")
+    rows = []
+    replaced = False
+
+    for row in load_jsonl(path):
+        if row.get("run_id") != run_id:
+            rows.append(row)
+            continue
+        if not replaced:
+            rows.append(obj)
+            replaced = True
+
+    if not replaced:
+        rows.append(obj)
+
+    write_jsonl(path, rows)
 
 
 def main() -> int:
@@ -78,7 +116,7 @@ def main() -> int:
         "goal_preview": read_text(goal, limit=1000),
     }
 
-    append_jsonl(project_root / "registries" / "idea_registry.jsonl", idea_entry)
+    upsert_jsonl_by_run_id(project_root / "registries" / "idea_registry.jsonl", idea_entry)
 
     report_dir = project_root / "reports" / "run_cards"
     report_dir.mkdir(parents=True, exist_ok=True)
